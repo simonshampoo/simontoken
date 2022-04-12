@@ -33,13 +33,20 @@ contract ClaimSimonToken is Ownable, Pausable {
         uint256 timestamp
     );
 
+    ///@notice gets updated by a set amount whenever someone claims.
+    ///@dev always divisible by 10,000 (decimal)
     uint256 totalClaimed;
 
+    ///@notice indicates the claim start time and claim duration
+    ///@dev assigned values in the startClaim() function
     uint256 claimDuration;
     uint256 claimStartTime;
 
+    ///@notice constant amount that all addresses will be able to claim once
     uint256 immutable amountToClaim;
 
+    ///@notice mapping from addresses to amountClaimed
+    ///@dev all users who claimed will have a non-zero value associated with their address (obviously)
     mapping(address => uint256) amountClaimed;
 
     constructor(address _simonTokenAddress, uint256 _amountToClaim) internal {
