@@ -22,19 +22,8 @@ contract ClaimSimonToken is Ownable, Pausable {
         uint256 amount,
         uint256 timestamp
     );
-    event TokenStaked(
-        address indexed staker,
-        uint256 amount,
-        uint256 timestamp
-    );
-    event TokenUnstaked(
-        address indexed staker,
-        uint256 amount,
-        uint256 timestamp
-    );
 
     ///@notice gets updated by a set amount whenever someone claims.
-    ///@dev always divisible by 10,000 (decimal)
     uint256 totalClaimed;
 
     ///@notice indicates the claim start time and claim duration
@@ -42,14 +31,11 @@ contract ClaimSimonToken is Ownable, Pausable {
     uint256 claimDuration;
     uint256 claimStartTime;
 
-    ///@notice constant amount that all addresses will be able to claim once
-    uint256 immutable amountToClaim;
-
     ///@notice mapping from addresses to amountClaimed
     ///@dev all users who claimed will have a non-zero value associated with their address (obviously)
     mapping(address => uint256) amountClaimed;
 
-    constructor(address _simonTokenAddress, uint256 _amountToClaim) internal {
+    constructor(address _simonTokenAddress) internal {
         require(
             _simonTokenAddress != address(0),
             "ClaimSimonToken: $IMON Token address cannot be the zero adddress."
@@ -59,11 +45,12 @@ contract ClaimSimonToken is Ownable, Pausable {
             "ClaimSimonToken: Amount to claim must be greater than 0."
         );
         simonToken = IERC20(_simonTokenAddress);
-        amountToClaim = _amountToClaim;
-
         _pause();
     }
 
+    ///@notice starts the claim period
+    ///@param _claimDuration how long the claim will last
+    ///@dev only callable by owner after deployment of contract
     function startClaim(uint256 _claimDuration) external onlyOwner whenPaused {
         require(_claimDuration > 0, "Claim duration has to be longer than 0.");
         claimDuration = _claimDuration;
@@ -74,11 +61,16 @@ contract ClaimSimonToken is Ownable, Pausable {
         emit ClaimStart(claimStartTime, claimDuration);
     }
 
+    ///@notice pauses the claim period
+    ///@dev only callable by owner. presumably to end the claim period
     function pauseClaim() external onlyOwner {
         _pause();
     }
 
-    function claimTokens() external whenNotPaused {
+    ///@notice allows addresses to claim amountToClaim tokens during the claim phase
+    ///@dev updates the mapping between addresses and their claimed value
+    ///@dev also updates totalClaimed by the amount claimed by users
+    function claimTokens() external payable whenNotPaused {
         require(
             block.timestamp >= claimStartTime &&
                 block.timeStamp < claimStartTime + claimDuration,
@@ -88,30 +80,21 @@ contract ClaimSimonToken is Ownable, Pausable {
             amountClaimed[msg.sender] == 0,
             "ClaimSimonToken: You've already claimed your tokens."
         );
+        require(
+            msg.sender != address(0),
+            "ClaimSimonToken: Claimer cannot be the zero address."
+        );
+        uint256 amount = (10000 * msg.value) / 10**18;
+        simonToken.safeTransfer(msg.sender, amount);
+        amountClaimed[msg.sender] += amount;
 
-        simonToken.safeTransfer(msg.sender, amountToClaim);
-        amountClaimed[msg.sender] += amountToClaim;
+        totalClaimed += amount;
 
-        totalClaimed += amountToClaim;
-
-        emit TokensClaimed(msg.sender, amountToClaim, block.timestamp);
+        emit TokensClaimed(msg.sender, amount, block.timestamp);
     }
 
-    // TODO
-    function stakeTokens(uint256 _amount, address _staker) external {}
-
-    /// TODO
-    function calculateStakedRewards(address _staker)
-        public
-        view
-        returns (uint256)
-    {}
-
-    /// TODO
-    function withdrawStake(uint256 _amountToWithdraw, address _staker)
-        external
-    {}
-
+    ///@notice allows users to burn their tokens
+    ///@param _amount the amount of tokens they want to burn
     function burnTokens(uint256 _amount) external {
         require(
             _amount > 0,
@@ -121,6 +104,7 @@ contract ClaimSimonToken is Ownable, Pausable {
         emit TokensBurned(msg.sender, _amount, block.timestamp);
     }
 
+    ///@notice transfers all unclaimed simon tokens and Ether to the smart contract after the claim duration is done
     function claimUnclaimedTokens() external onlyOwner {
         require(
             block.timestamp > claimStartTime + claimDuration,
