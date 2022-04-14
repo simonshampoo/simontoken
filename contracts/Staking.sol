@@ -12,12 +12,12 @@ contract Staking {
     IERC20 public immutable simonToken;
     IERC20 public immutable shampooToken;
 
-    event TokenStaked(
+    event TokensStaked(
         address indexed staker,
         uint256 amount,
         uint256 timestamp
     );
-    event TokenUnstaked(
+    event TokensUnstaked(
         address indexed staker,
         uint256 amount,
         uint256 timestamp
@@ -37,11 +37,12 @@ contract Staking {
 
     mapping(address => uint256) rewardsOf;
     mapping(address => uint256) private stakeOf;
+    mapping(address => uint256) public userRewardPerTokenPaid;
 
     constructor(
-        address memory _simonTokenAddress,
-        address_ memory _shampooTokenAddress
-    ) public {
+        address _simonTokenAddress,
+        address _shampooTokenAddress
+    ) {
         simonToken = IERC20(_simonTokenAddress);
         shampooToken = IERC20(_shampooTokenAddress);
     }
@@ -54,56 +55,56 @@ contract Staking {
         rewardPerTokenStored = rewardPerToken();
         lastUpdateTime = block.timestamp;
 
-        rewards[account] = earned(account);
+        rewardsOf[account] = earned(account);
         userRewardPerTokenPaid[account] = rewardPerTokenStored;
         _;
     }
 
     function rewardPerToken() public view returns (uint256) {
-        if (_totalSupply == 0) {
+        if (totalSupply == 0) {
             return rewardPerTokenStored;
         }
         return
             rewardPerTokenStored +
-            (((block.timestamp - lastUpdateTime) * rewardRate * 1e18) /
-                _totalSupply);
+            (((block.timestamp - lastUpdateTime) * REWARD_RATE * 1e18) /
+                totalSupply);
     }
 
     function earned(address account) public view returns (uint256) {
         return
-            ((_balances[account] *
+            ((stakeOf[account] *
                 (rewardPerToken() - userRewardPerTokenPaid[account])) / 1e18) +
-            rewards[account];
+            rewardsOf[account];
     }
 
     //==================================================================================================
     //==================================================================================================
     //==================================================================================================
     // TODO
-    function stakeTokens(uint256 _amount) external {
-        require(
-            _amount > 0,
-            "ClaimSimonToken: You must stake at least one token."
-        );
+    function stakeTokens(uint256 _amount) external updateReward(msg.sender) {
+        require(_amount > 0, "Staking: You must stake at least one token.");
         require(
             msg.sender != address(0),
-            "ClaimSimonToken: Claimer cannot be the zero address."
+            "Staking: Claimer cannot be the zero address."
         );
         require(
             simonToken.balanceOf(msg.sender) > 0,
-            "ClaimSimonToken: You have no tokens to stake."
+            "Staking: You have no tokens to stake."
         );
-        totalSupply += amount;
+        totalSupply += _amount;
         stakeOf[msg.sender] += _amount;
 
         ++numStakers;
 
         simonToken.transferFrom(msg.sender, address(this), _amount);
-        emit TokensStaked(_staker, _amount, block.timestamp);
+        emit TokensStaked(msg.sender, _amount, block.timestamp);
     }
 
     /// TODO
-    function withdrawStake(uint256 _amountToWithdraw) external {
+    function withdrawStake(uint256 _amountToWithdraw)
+        external
+        updateReward(msg.sender)
+    {
         require(
             _amountToWithdraw <= stakeOf[msg.sender],
             "Staking: You cannot withdraw more tokens than you have staked."
@@ -113,18 +114,13 @@ contract Staking {
             "Staking: Cannot withdraw from the zero address."
         );
         simonToken.transferFrom(address(this), msg.sender, _amountToWithdraw);
-        emit TokensUnstaked(_staker, _amount, block.timestamp);
+        emit TokensUnstaked(msg.sender, _amountToWithdraw, block.timestamp);
     }
 
-    function getRewards() external updateReward(msg.sender) {
+    function claimRewards() external updateReward(msg.sender) {
         uint256 reward = rewardsOf[msg.sender];
         rewardsOf[msg.sender] = 0;
         shampooToken.transferFrom(address(this), msg.sender, reward);
         emit RewardsClaimed(msg.sender, reward, block.timestamp);
-    }
-
-    /// TODO
-    function calculateStakedRewards() public view returns (uint256) {
-        uint256 rewards = rewards = amountStaked * 10;
     }
 }

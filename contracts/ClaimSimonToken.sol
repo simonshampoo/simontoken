@@ -35,14 +35,10 @@ contract ClaimSimonToken is Ownable, Pausable {
     ///@dev all users who claimed will have a non-zero value associated with their address (obviously)
     mapping(address => uint256) amountClaimed;
 
-    constructor(address _simonTokenAddress) internal {
+    constructor(address _simonTokenAddress) {
         require(
             _simonTokenAddress != address(0),
             "ClaimSimonToken: $IMON Token address cannot be the zero adddress."
-        );
-        require(
-            _amountToClaim > 0,
-            "ClaimSimonToken: Amount to claim must be greater than 0."
         );
         simonToken = IERC20(_simonTokenAddress);
         _pause();
@@ -73,7 +69,7 @@ contract ClaimSimonToken is Ownable, Pausable {
     function claimTokens() external payable whenNotPaused {
         require(
             block.timestamp >= claimStartTime &&
-                block.timeStamp < claimStartTime + claimDuration,
+                block.timestamp < claimStartTime + claimDuration,
             "ClaimSimonToken: Claimable period finished."
         );
         require(
@@ -85,12 +81,14 @@ contract ClaimSimonToken is Ownable, Pausable {
             "ClaimSimonToken: Claimer cannot be the zero address."
         );
         uint256 amount = (10000 * msg.value) / 10**18;
-        simonToken.safeTransfer(msg.sender, amount);
+
         amountClaimed[msg.sender] += amount;
 
         totalClaimed += amount;
 
         emit TokensClaimed(msg.sender, amount, block.timestamp);
+
+        simonToken.safeTransfer(msg.sender, amount);
     }
 
     ///@notice allows users to burn their tokens
@@ -100,8 +98,9 @@ contract ClaimSimonToken is Ownable, Pausable {
             _amount > 0,
             "ClaimSimonToken: You must burn at least one token."
         );
-        simonToken._burn(msg.sender, _amount);
+
         emit TokensBurned(msg.sender, _amount, block.timestamp);
+        simonToken.transferFrom(msg.sender, address(0), _amount);
     }
 
     ///@notice transfers all unclaimed simon tokens and Ether to the smart contract after the claim duration is done
@@ -111,11 +110,11 @@ contract ClaimSimonToken is Ownable, Pausable {
             "ClaimSimonToken: Claimable period not done yet."
         );
 
-        simonToken.safeTransfer(owner(), simonToken.balanceOf(address(this)));
-
         uint256 balance = address(this).balance;
         if (balance > 0) {
             Address.sendValue(payable(owner()), balance);
         }
+
+        simonToken.safeTransfer(owner(), simonToken.balanceOf(address(this)));
     }
 }
