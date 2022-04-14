@@ -22,11 +22,21 @@ contract Staking {
         uint256 amount,
         uint256 timestamp
     );
+    event RewardsClaimed(
+        address indexed claimer,
+        uint256 amount,
+        uint256 timestamp
+    );
 
-    // ==== STAKERS ==== //
+    uint256 totalSupply;
+    uint256 public numStakers;
+
+    uint256 rewardPerTokenStored;
+    uint256 lastUpdateTime;
+    uint256 private constant REWARD_RATE = 100;
+
     mapping(address => uint256) rewardsOf;
-    mapping(address => uint256) private balances;
-    uint256 internal numStakers;
+    mapping(address => uint256) private stakeOf;
 
     constructor(
         address memory _simonTokenAddress,
@@ -36,6 +46,39 @@ contract Staking {
         shampooToken = IERC20(_shampooTokenAddress);
     }
 
+    //==================================================================================================
+    //==================================================================================================
+    //==================================================================================================
+
+    modifier updateReward(address account) {
+        rewardPerTokenStored = rewardPerToken();
+        lastUpdateTime = block.timestamp;
+
+        rewards[account] = earned(account);
+        userRewardPerTokenPaid[account] = rewardPerTokenStored;
+        _;
+    }
+
+    function rewardPerToken() public view returns (uint256) {
+        if (_totalSupply == 0) {
+            return rewardPerTokenStored;
+        }
+        return
+            rewardPerTokenStored +
+            (((block.timestamp - lastUpdateTime) * rewardRate * 1e18) /
+                _totalSupply);
+    }
+
+    function earned(address account) public view returns (uint256) {
+        return
+            ((_balances[account] *
+                (rewardPerToken() - userRewardPerTokenPaid[account])) / 1e18) +
+            rewards[account];
+    }
+
+    //==================================================================================================
+    //==================================================================================================
+    //==================================================================================================
     // TODO
     function stakeTokens(uint256 _amount) external {
         require(
@@ -50,23 +93,38 @@ contract Staking {
             simonToken.balanceOf(msg.sender) > 0,
             "ClaimSimonToken: You have no tokens to stake."
         );
-        Staker staker = Staker(_amount, block.timestamp);
-        simonToken.transferFrom(msg.sender, address(this), _amount);
+        totalSupply += amount;
+        stakeOf[msg.sender] += _amount;
+
         ++numStakers;
+
+        simonToken.transferFrom(msg.sender, address(this), _amount);
         emit TokensStaked(_staker, _amount, block.timestamp);
     }
 
     /// TODO
-    function calculateStakedRewards() public view returns (uint256) {
-        Staker staker = stakesOf[msg.sender];
-        uint256 time = staker.beganStake;
-        uint256 rewards = rewards = amountStaked * 10;
+    function withdrawStake(uint256 _amountToWithdraw) external {
+        require(
+            _amountToWithdraw <= stakeOf[msg.sender],
+            "Staking: You cannot withdraw more tokens than you have staked."
+        );
+        require(
+            msg.sender != address(0),
+            "Staking: Cannot withdraw from the zero address."
+        );
+        simonToken.transferFrom(address(this), msg.sender, _amountToWithdraw);
+        emit TokensUnstaked(_staker, _amount, block.timestamp);
+    }
+
+    function getRewards() external updateReward(msg.sender) {
+        uint256 reward = rewardsOf[msg.sender];
+        rewardsOf[msg.sender] = 0;
+        shampooToken.transferFrom(address(this), msg.sender, reward);
+        emit RewardsClaimed(msg.sender, reward, block.timestamp);
     }
 
     /// TODO
-    function withdrawStake(uint256 _amountToWithdraw, address _staker)
-        external
-    {
-        emit TokensUnstaked(_staker, _amount, block.timestamp);
+    function calculateStakedRewards() public view returns (uint256) {
+        uint256 rewards = rewards = amountStaked * 10;
     }
 }
