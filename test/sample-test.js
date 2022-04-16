@@ -1,12 +1,12 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Greeter", function () {
-  it("Should return the new greeting once it's changed", async function () {
-    const Greeter = await ethers.getContractFactory("Greeter");
-    const greeter = await Greeter.deploy("Hello, world!");
-    await greeter.deployed();
-
+describe("SimonToken", function () {
+  it("should mint one billion $IMON tokens", async function () {
+    const SimonToken = await ethers.getContractFactory("SimonToken");
+    const [owner] = await ethers.getSigners(); 
+    const simontoken = await SimonToken.deploy("SimonToken", "IMON", 1000000000000000000000000000);
+    await simontoken.deployed();
     expect(await greeter.greet()).to.equal("Hello, world!");
 
     const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
